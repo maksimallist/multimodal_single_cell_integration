@@ -52,12 +52,10 @@ if __name__ == '__main__':
     meta_file = root.joinpath('dataset', 'metadata.csv')
     train_features_path = root.joinpath('dataset', 'train_multi_inputs.h5')
     train_targets_path = root.joinpath('dataset', 'train_multi_targets.h5')
-    test_features_path = root.joinpath('dataset', 'test_multi_inputs.h5')
 
     # log paths
     watcher.log("train_dataset", train_features_path=str(train_features_path))
     watcher.log("train_dataset", train_targets_path=str(train_targets_path))
-    watcher.log("test_dataset", test_features_path=str(test_features_path))
 
     # load dataset
     seed = watcher.rlog('train', random_seed=42)
