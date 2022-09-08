@@ -44,6 +44,7 @@ def train_val_split(dataset, val_volume: float = 0.2):
     return folds[0], folds[1]
 
 
+# todo: add K-fold разбиение
 if __name__ == '__main__':
     root = Path(__file__).parent.parent
     exp_root = root.joinpath('experiments').absolute()
@@ -115,7 +116,6 @@ if __name__ == '__main__':
     watcher.save_config()
     watcher.add_model_checkpoint_callback(mode='max', check_freq=2, verbose=1)
 
-    # todo: add K-fold разбиение
     print(f"[ Start training ... ]")
     model.train()
     for e in range(epochs):
