@@ -1,6 +1,8 @@
-einops==0.4.1
-numpy==1.23.2
-pandas==1.4.4
-torch==1.12.1+cu116
-torchmetrics~=0.9.3
-tqdm~=4.64.1
+einops
+numpy
+pandas
+torch
+torchmetrics
+tqdm
+h5py
+hdf5plugin
