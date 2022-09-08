@@ -30,6 +30,20 @@ def add_dimension(tensor: torch.Tensor, dim: int = 0) -> torch.Tensor:
     return torch.unsqueeze(tensor, dim=dim)
 
 
+def kfold_split(dataset, folds: int):
+    fold_sizes = [len(dataset) // folds] * (folds - 1) + [len(dataset) // folds + len(dataset) % folds]
+    ds_folds = torch.utils.data.random_split(dataset, fold_sizes, generator=torch.Generator().manual_seed(42))
+    for fold in range(folds):
+        yield torch.utils.data.ConcatDataset(ds_folds[:fold] + ds_folds[fold + 1:]), ds_folds[fold]
+
+
+def train_val_split(dataset, val_volume: float = 0.2):
+    train_examples = len(dataset)
+    val_num = int(train_examples * val_volume)
+    folds = torch.utils.data.random_split(dataset, [train_examples - val_num, val_num], generator=torch.Generator())
+    return folds[0], folds[1]
+
+
 if __name__ == '__main__':
     root = Path(__file__).parent.parent
     exp_root = root.joinpath('experiments').absolute()
@@ -58,10 +72,15 @@ if __name__ == '__main__':
     test_dataset = MyDataset(features_file=str(test_features_path), start_pos=start, load_pos=end,
                              transform=add_dimension, device=device)
 
+    print(f"[ Split train data on train and valid set ... ]")
+    train_dataset, valid_dataset = train_val_split(train_dataset, 0.2)
+    print(f"[ Start's complete. ]")
+
     # create dataloaders
     batch_size = watcher.rlog('train', batch_size=2)
     shuffle_mode = watcher.rlog('train', shuffle_mode=True)
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=shuffle_mode)
+    valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=shuffle_mode)
     test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=shuffle_mode)
     print(f"[ Load a {end - start} lines of dataset from hard disk is complete. ]")
 
@@ -99,15 +118,15 @@ if __name__ == '__main__':
     epochs = watcher.rlog('train', epohs=2)
     verbose_every = watcher.rlog('train', print_loss_every=2)
     watcher.save_config()
-
     watcher.add_model_checkpoint_callback(mode='min', check_freq=10, verbose=1)
 
+    # todo: add K-fold разбиение
+    # todo: добавить код формирования файла для сабмита на тестовой части датасета
     print(f"[ Start training ... ]")
     model.train()
     for e in range(epochs):
         print(f"[ Training epoch: {e + 1} ------------------------------ ]")
         with tqdm(train_dataloader, miniters=verbose_every, desc='Batch', disable=False) as progress:
-            # for i, (x, y) in enumerate(train_dataloader):
             for i, (x, y) in enumerate(progress):
                 step = i + (e + 1) * (len(train_dataloader) // batch_size)
                 # forward pass
@@ -149,26 +168,31 @@ if __name__ == '__main__':
             p_corr.reset()
 
             # -------------------------------------------------------------------
-            print(
-                f"[ Epoch number {e + 1} is complete. MSE metric = {err} | Pearson correlation coefficient = {corr} ]")
+
+            print(f"[ Epoch {e + 1} is complete. | MSE: {err} | Pearson-corr: {corr} ]")
             watcher.save_model(train_step=e, trainable_rule=model, name=model_name)
             scheduler.step()
             print()
-            # -------------------------------------------------------------------
-            # todo: добавить кроссвалидацию и K-fold разбиение
-            # todo: добавить код формирования файла для сабмита на тестовой части датасета
 
-            # print(f"[ Validation is started ... ]")
-            # with torch.no_grad():
-            #     for i, (x, y) in enumerate(test_dataloader):
-            #         pred = torch.squeeze(model(x))
-            #         # calculate metric
-            #         err = mse(pred, y)
-            #         # corr = p_corr(pred, y)
-            #
-            #     err = mse.compute()
-            #     mse.reset()
-            #     # corr = p_corr.compute()
-            #     # p_corr.reset()
-            #     print(f"[ Validation is complete. MSE metric = {err} | Pearson correlation coefficient = XXX ]")
+            # -------------------------------------------------------------------
+            print(f"[ Validation is started ... ]")
+            with torch.no_grad():
+                with tqdm(valid_dataloader, miniters=verbose_every, desc='Batch', disable=False) as val_progress:
+                    for i, (x, y) in enumerate(val_progress):
+                        pred = torch.squeeze(model(x))
+                        # calculate metric
+                        err = mse(pred, y)
+                        # calculate Pearson correlation metric
+                        for v_x, v_y in zip(pred, y):
+                            p_corr(v_x, v_y)
+                        corr = p_corr.compute()
+
+                    err = mse.compute()
+                    corr = p_corr.compute()
+
+                    mse.reset()
+                    p_corr.reset()
+            print(f"[ Validation is complete. | MSE: {err} | Pearson-corr: {corr} ]")
+
+    # -------------------------------------------------------------------
     watcher.writer.close()
