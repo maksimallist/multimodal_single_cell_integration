@@ -46,8 +46,8 @@ def train_val_split(dataset, val_volume: float = 0.2):
 
 # todo: add K-fold разбиение
 if __name__ == '__main__':
-    root = Path(__file__).parent.parent
-    exp_root = root.joinpath('experiments').absolute()
+    root = Path(__file__).absolute().parent.parent
+    exp_root = root.joinpath('experiments')
     watcher = ExpWatcher(exp_name='debug_train_script', root=exp_root)
     # data paths
     meta_file = root.joinpath('dataset', 'metadata.csv')
@@ -61,9 +61,10 @@ if __name__ == '__main__':
     # load dataset
     seed = watcher.rlog('train', random_seed=42)
     torch.manual_seed(seed)  # fix random generator state
-    device = watcher.rlog('train', device='cuda')
+    device = torch.device('cuda')
+    watcher.log('train', device='cuda')
     start = watcher.rlog("train_dataset", start_pos=0)
-    end = watcher.rlog("train_dataset", end_pos=100)
+    end = watcher.rlog("train_dataset", end_pos=1000)
     print(f"[ Load a {end - start} lines of dataset from hard disk ... ]")
     train_dataset = MyDataset(features_file=str(train_features_path), start_pos=start, load_pos=end,
                               targets_file=str(train_targets_path),
@@ -95,11 +96,10 @@ if __name__ == '__main__':
         p_num += np.prod(np.array(p.shape))
 
     watcher.log('model', trainable_parameters=p_num)
-    watcher.writer.add_graph(model, next(iter(train_dataloader))[0])
+    # watcher.writer.add_graph(model, next(iter(train_dataloader))[0])
     print(f"Number of trainable parameters in model: {p_num};")
 
     # Loss function and optimizer
-
     watcher.log('train', optimizer='torch.optim.Adam')
     learning_rate = watcher.rlog('train', lr=0.002)
     opt_betas = watcher.rlog('train', opt_betas=(0.5, 0.5))

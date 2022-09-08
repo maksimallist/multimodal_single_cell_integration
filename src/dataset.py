@@ -14,7 +14,7 @@ class MyDataset(Dataset):
                  targets_file: Optional[str] = None,
                  transform: Optional[Callable] = None,
                  target_transform: Optional[Callable] = None,
-                 device: Optional[str] = None):
+                 device=None):
         self.features = pd.read_hdf(features_file, start=start_pos, stop=load_pos)
         if targets_file:
             self.targets = pd.read_hdf(targets_file, start=start_pos, stop=load_pos)
