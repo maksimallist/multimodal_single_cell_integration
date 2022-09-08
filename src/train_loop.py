@@ -69,8 +69,6 @@ if __name__ == '__main__':
     train_dataset = MyDataset(features_file=str(train_features_path), start_pos=start, load_pos=end,
                               targets_file=str(train_targets_path),
                               transform=add_dimension, device=device)
-    test_dataset = MyDataset(features_file=str(test_features_path), start_pos=start, load_pos=end,
-                             transform=add_dimension, device=device)
 
     print(f"[ Split train data on train and valid set ... ]")
     train_dataset, valid_dataset = train_val_split(train_dataset, 0.2)
@@ -81,7 +79,6 @@ if __name__ == '__main__':
     shuffle_mode = watcher.rlog('train', shuffle_mode=True)
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=shuffle_mode)
     valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=shuffle_mode)
-    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=shuffle_mode)
     print(f"[ Load a {end - start} lines of dataset from hard disk is complete. ]")
 
     # model
@@ -99,7 +96,7 @@ if __name__ == '__main__':
         p_num += np.prod(np.array(p.shape))
 
     watcher.log('model', trainable_parameters=p_num)
-    watcher.writer.add_graph(model, next(iter(test_dataloader)))
+    watcher.writer.add_graph(model, next(iter(train_dataloader))[0])
     print(f"Number of trainable parameters in model: {p_num};")
 
     # Loss function and optimizer
@@ -115,13 +112,12 @@ if __name__ == '__main__':
     p_corr = PearsonCorrCoef().to(device)
 
     # Train loop
-    epochs = watcher.rlog('train', epohs=2)
+    epochs = watcher.rlog('train', epohs=10)
     verbose_every = watcher.rlog('train', print_loss_every=2)
     watcher.save_config()
-    watcher.add_model_checkpoint_callback(mode='min', check_freq=10, verbose=1)
+    watcher.add_model_checkpoint_callback(mode='max', check_freq=2, verbose=1)
 
     # todo: add K-fold разбиение
-    # todo: добавить код формирования файла для сабмита на тестовой части датасета
     print(f"[ Start training ... ]")
     model.train()
     for e in range(epochs):
@@ -153,12 +149,6 @@ if __name__ == '__main__':
                 # log loss
                 loss_n = loss.detach().cpu().numpy()
                 watcher.add_scalar('Loss-Pearson_Correlation', loss_n, step)
-                watcher.is_model_better(monitor=loss_n,
-                                        step=step,
-                                        model=model,
-                                        optimizer=model_optimizer,
-                                        criterion=corr_error)
-
                 if i % verbose_every == 0:
                     print(f"[ Loss: {loss_n} | MSE: {err} | Pearson-corr: {corr} ]")
 
@@ -167,32 +157,36 @@ if __name__ == '__main__':
             corr = p_corr.compute()
             p_corr.reset()
 
-            # -------------------------------------------------------------------
+        # -------------------------------------------------------------------
 
-            print(f"[ Epoch {e + 1} is complete. | MSE: {err} | Pearson-corr: {corr} ]")
-            watcher.save_model(train_step=e, trainable_rule=model, name=model_name)
-            scheduler.step()
-            print()
+        print(f"[ Epoch {e + 1} is complete. | MSE: {err} | Pearson-corr: {corr} ]")
+        watcher.save_model(train_step=e, trainable_rule=model, name=model_name)
+        scheduler.step()
+        print()
 
-            # -------------------------------------------------------------------
-            print(f"[ Validation is started ... ]")
-            with torch.no_grad():
-                with tqdm(valid_dataloader, miniters=verbose_every, desc='Batch', disable=False) as val_progress:
-                    for i, (x, y) in enumerate(val_progress):
-                        pred = torch.squeeze(model(x))
-                        # calculate metric
-                        err = mse(pred, y)
-                        # calculate Pearson correlation metric
-                        for v_x, v_y in zip(pred, y):
-                            p_corr(v_x, v_y)
-                        corr = p_corr.compute()
-
-                    err = mse.compute()
+        # -------------------------------------------------------------------
+        print(f"[ Validation is started ... ]")
+        with torch.no_grad():
+            with tqdm(valid_dataloader, miniters=verbose_every, desc='Batch', disable=False) as val_progress:
+                for i, (x, y) in enumerate(val_progress):
+                    pred = torch.squeeze(model(x))
+                    # calculate metric
+                    err = mse(pred, y)
+                    # calculate Pearson correlation metric
+                    for v_x, v_y in zip(pred, y):
+                        p_corr(v_x, v_y)
                     corr = p_corr.compute()
 
-                    mse.reset()
-                    p_corr.reset()
-            print(f"[ Validation is complete. | MSE: {err} | Pearson-corr: {corr} ]")
+                err = mse.compute()
+                corr = p_corr.compute().detach().cpu().numpy()
+                watcher.is_model_better(monitor=corr,
+                                        step=step,
+                                        model=model,
+                                        optimizer=model_optimizer,
+                                        criterion=corr_error)
 
+                mse.reset()
+                p_corr.reset()
+        print(f"[ Validation is complete. | MSE: {err} | Pearson-corr: {corr} ]")
     # -------------------------------------------------------------------
     watcher.writer.close()
