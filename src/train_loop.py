@@ -9,7 +9,7 @@ from torchmetrics import MeanSquaredError, PearsonCorrCoef
 from tqdm import tqdm
 
 from model import EncoderConfig, Model
-from src.dataset import MyDataset
+from dataset import MyDataset
 from watchers import ExpWatcher
 
 
