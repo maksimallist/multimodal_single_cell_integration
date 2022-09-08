@@ -9,7 +9,7 @@ from torchmetrics import MeanSquaredError, PearsonCorrCoef
 from tqdm import tqdm
 
 from model import EncoderConfig, Model
-from dataset import MyDataset
+from dataset import FlowDataset
 from watchers import ExpWatcher
 
 
@@ -50,7 +50,6 @@ if __name__ == '__main__':
     exp_root = root.joinpath('experiments')
     watcher = ExpWatcher(exp_name='debug_train_script', root=exp_root)
     # data paths
-    meta_file = root.joinpath('dataset', 'metadata.csv')
     train_features_path = root.joinpath('dataset', 'train_multi_inputs.h5')
     train_targets_path = root.joinpath('dataset', 'train_multi_targets.h5')
 
@@ -63,23 +62,18 @@ if __name__ == '__main__':
     torch.manual_seed(seed)  # fix random generator state
     device = torch.device('cuda')
     watcher.log('train', device='cuda')
-    start = watcher.rlog("train_dataset", start_pos=0)
-    end = watcher.rlog("train_dataset", end_pos=1000)
-    print(f"[ Load a {end - start} lines of dataset from hard disk ... ]")
-    train_dataset = MyDataset(features_file=str(train_features_path), start_pos=start, load_pos=end,
-                              targets_file=str(train_targets_path),
-                              transform=add_dimension, device=device)
-
-    print(f"[ Split train data on train and valid set ... ]")
-    train_dataset, valid_dataset = train_val_split(train_dataset, 0.2)
-    print(f"[ Start's complete. ]")
+    print(f"[ Load the dataset from hard disk ... ]")
+    train_dataset = FlowDataset(features_file=str(train_features_path), targets_file=str(train_targets_path),
+                                transform=add_dimension, device=device)
 
     # create dataloaders
     batch_size = watcher.rlog('train', batch_size=2)
     shuffle_mode = watcher.rlog('train', shuffle_mode=True)
+    print(f"[ Split train data on train and valid set. ]")
+    train_dataset, valid_dataset = train_val_split(train_dataset, 0.2)
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=shuffle_mode)
     valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=shuffle_mode)
-    print(f"[ Load a {end - start} lines of dataset from hard disk is complete. ]")
+    print(f"[ Load dataset is complete. ]")
 
     # model
     model_name = watcher.rlog('model', name='enc&reg_head')

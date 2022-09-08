@@ -1,6 +1,7 @@
 from typing import Callable, Optional, Tuple, Union
 
 import h5py
+import hdf5plugin  # не удалять!
 import pandas as pd
 import torch
 from torch.utils.data import Dataset
