@@ -8,8 +8,8 @@ from torch.utils.data import DataLoader
 from torchmetrics import MeanSquaredError, PearsonCorrCoef
 from tqdm import tqdm
 
-from model import EncoderConfig, Model
 from dataset import FlowDataset
+from model import EncoderConfig, MultiModel
 from watchers import ExpWatcher
 
 
@@ -84,7 +84,7 @@ if __name__ == '__main__':
     channels = watcher.rlog('model', channels=1)
 
     encoder_conf = EncoderConfig(filters=encoder_filters, kernels=encoder_kernels)
-    model = Model(encoder_conf, enc_out=enc_out, dec_in=dec_in).to(device)
+    model = MultiModel(encoder_conf, enc_out=enc_out, dec_in=dec_in).to(device)
     p_num = 0
     for p in model.parameters():
         p_num += np.prod(np.array(p.shape))

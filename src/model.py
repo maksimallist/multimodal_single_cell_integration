@@ -226,7 +226,7 @@ class Decoder(nn.Module):
         return x
 
 
-class Model(nn.Module):
+class MultiModel(nn.Module):
     def __init__(self, enc_conf, enc_out: int, dec_in: int, add_bottleneck: bool = False):
         super().__init__()
         self.encoder = Encoder(enc_conf)
@@ -249,7 +249,7 @@ class Model(nn.Module):
         return functional.silu(logits)
 
 
-class ModelSD(nn.Module):
+class MultiModelSD(nn.Module):
     def __init__(self, enc_conf, enc_out: int, dec_in: int, add_bottleneck: bool = False):
         super().__init__()
         self.encoder = Encoder(enc_conf)
@@ -270,3 +270,59 @@ class ModelSD(nn.Module):
         logits = self.decoder(h)
 
         return functional.silu(logits)
+
+
+class CiteClsHead(nn.Module):
+    def __init__(self, input_dim: int):  # 345
+        super(CiteClsHead, self).__init__()
+        self.activation = functional.silu
+
+        self.l1 = nn.Linear(in_features=input_dim, out_features=300, bias=True)
+        self.dropout_1 = nn.Dropout(0.4)
+
+        self.l2 = nn.Linear(in_features=300, out_features=256, bias=True)
+        self.dropout_2 = nn.Dropout(0.4)
+
+        self.l3 = nn.Linear(in_features=256, out_features=256, bias=True)
+        self.dropout_3 = nn.Dropout(0.4)
+
+        self.l4 = nn.Linear(in_features=256, out_features=128, bias=True)
+        self.dropout_4 = nn.Dropout(0.4)
+
+        self.dropout_5 = nn.Dropout(0.4)
+
+        self.l5 = nn.Linear(in_features=940, out_features=140, bias=True)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        t1 = self.activation(self.l1(x))
+        dt1 = self.dropout_1(t1)
+
+        t2 = self.activation(self.l2(dt1))
+        dt2 = self.dropout_2(t2)
+
+        t3 = self.activation(self.l3(dt2))
+        dt3 = self.dropout_3(t3)
+
+        t4 = self.activation(self.l4(dt3))
+        dt4 = self.dropout_4(t4)
+
+        tc = torch.concat([dt1, dt2, dt3, dt4], dim=1)
+        dtf = self.dropout_5(tc)
+
+        logits = self.activation(self.l5(dtf))
+
+        return logits
+
+
+class CiteModel(nn.Module):
+    def __init__(self, enc_conf, enc_out: int):
+        super().__init__()
+        self.encoder = Encoder(enc_conf)
+        self.decoder = CiteClsHead(input_dim=enc_out)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        enc_out = self.encoder(x)
+        enc_out = torch.squeeze(enc_out)
+        logits = self.decoder(enc_out)
+
+        return logits
