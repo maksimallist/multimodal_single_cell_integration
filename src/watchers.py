@@ -97,7 +97,7 @@ class ExpWatcher(Watcher):
     def save_model(self, train_step: int, trainable_rule: Module, name: str):
         model_path = self._checkpoints_folder.joinpath("train_step_" + str(train_step))
         model_path.mkdir()
-        torch.save(trainable_rule, str(model_path.joinpath(f"{name}.pth")))
+        torch.save(trainable_rule.state_dict(), str(model_path.joinpath(f"{name}.pth")))
 
     def add_model_checkpoint_callback(self,
                                       mode: str = 'min',
@@ -121,8 +121,7 @@ class ExpWatcher(Watcher):
                         monitor: float,
                         step: int,
                         model: torch.nn.Module,
-                        optimizer: torch.optim.Optimizer,
-                        criterion: Callable):
+                        optimizer: torch.optim.Optimizer):
         if self.mode == 'min':
             if monitor < self.best_met:
                 self.counter += 1
@@ -138,8 +137,7 @@ class ExpWatcher(Watcher):
             self.counter = 0
             torch.save({'step': step,
                         'model_state_dict': model.state_dict(),
-                        'optimizer_state_dict': optimizer.state_dict(),
-                        'loss': criterion},
+                        'optimizer_state_dict': optimizer.state_dict()},
                        self.best_model_save_path)
 
     def save_config(self):
@@ -147,52 +145,3 @@ class ExpWatcher(Watcher):
 
     def add_scalar(self, *args, **kwargs):
         self.writer.add_scalar(*args, **kwargs)
-
-# class SaveBestModel:
-#     """
-#     Class to save the best model while training. If the current epoch's validation loss is less than the previous less,
-#     then save the model state.
-#     """
-#
-#     def __init__(self,
-#                  filepath: str,
-#                  mode: Union['min', 'max'] = 'min',
-#                  check_freq: int = 5,
-#                  verbose: Union[0, 1] = 0,
-#                  pth_name: str = 'best_model'):
-#         self.counter = 0
-#         self.mode = mode
-#         if mode == 'max':
-#             self.best_met = -numpy.inf
-#         else:
-#             self.best_met = numpy.inf
-#
-#         self.verbose = verbose
-#         self.check_freq = check_freq
-#         self.name = pth_name + '.pt'
-#         self.save_path = str(Path(filepath).joinpath(self.name))
-#
-#     def __call__(self,
-#                  monitor: float,
-#                  step: int,
-#                  model: torch.nn.Module,
-#                  optimizer: torch.optim.Optimizer,
-#                  criterion: Callable):
-#         if self.mode == 'min':
-#             if monitor < self.best_met:
-#                 self.counter += 1
-#         else:
-#             if monitor > self.best_met:
-#                 self.counter += 1
-#
-#         if self.counter == self.check_freq:
-#             self.best_met = monitor
-#             if self.verbose == 1:
-#                 print(f"\n[ Best met: {self.best_met} ]")
-#                 print(f"\n[ Saving best model weights for step: {step} ]\n")
-#
-#             torch.save({'step': step,
-#                         'model_state_dict': model.state_dict(),
-#                         'optimizer_state_dict': optimizer.state_dict(),
-#                         'loss': criterion},
-#                        self.save_path)
