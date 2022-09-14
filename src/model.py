@@ -73,7 +73,7 @@ class EncoderBlock(nn.Module):
 
     def residual_ops(self, tensor: torch.Tensor) -> torch.Tensor:
         x = self.resid_batch_norm(tensor)
-        x = functional.silu(self.gelu_weight * x) * x
+        x = functional.sigmoid(self.gelu_weight * x) * x
         x = self.resid_conv(x)
 
         return x
@@ -82,7 +82,7 @@ class EncoderBlock(nn.Module):
         x = self.conv(x)
         if self.use_batchnorm:
             x = self.batch_norm(x)
-        x = functional.silu(self.gelu_weight * x) * x
+        x = functional.sigmoid(self.gelu_weight * x) * x
         x = self.residual(x)
         out = self.att(x)
 
@@ -139,7 +139,7 @@ class SimpleDecoderBlock(nn.Module):
         x = self.conv(x)
         if self.use_batchnorm:
             x = self.batch_norm(x)
-        out = functional.silu(self.gelu_weight * x) * x
+        out = functional.sigmoid(self.gelu_weight * x) * x
 
         return out
 
@@ -173,7 +173,7 @@ class ResAttDecoderBlock(nn.Module):
 
     def residual_ops(self, tensor: torch.Tensor) -> torch.Tensor:
         x = self.resid_batch_norm(tensor)
-        x = functional.silu(self.gelu_weight * x) * x
+        x = functional.sigmoid(self.gelu_weight * x) * x
         x = self.resid_conv(x)
 
         return x
@@ -182,7 +182,7 @@ class ResAttDecoderBlock(nn.Module):
         x = self.conv(x)
         if self.use_batchnorm:
             x = self.batch_norm(x)
-        x = functional.silu(self.gelu_weight * x) * x
+        x = functional.sigmoid(self.gelu_weight * x) * x
         x = self.residual(x)
         out = self.att(x)
 
