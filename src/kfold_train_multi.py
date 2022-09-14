@@ -8,9 +8,9 @@ from torch.utils.data import DataLoader
 from torchmetrics import MeanSquaredError, PearsonCorrCoef
 from tqdm import tqdm
 
-from model import EncoderConfig, MultiModel
-from dataset import FlowDataset
-from watchers import ExpWatcher
+from src.dataset import FlowDataset
+from src.model import EncoderConfig, MultiModel
+from src.watchers import ExpWatcher
 
 
 def corr_error(predict: torch.Tensor, target: torch.Tensor, normalize: bool = True) -> torch.Tensor:
@@ -88,7 +88,7 @@ if __name__ == '__main__':
             p_num += np.prod(np.array(p.shape))
 
         watcher.log('model', trainable_parameters=p_num)
-        # watcher.writer.add_graph(model, next(iter(train_dataloader))[0])
+        # watcher.writer.add_graph(model, next(iter(train_dataloader))[1])
         print(f"Number of trainable parameters in model: {p_num};")
 
         # Loss function and optimizer
@@ -110,12 +110,13 @@ if __name__ == '__main__':
 
         print(f"[ Start training ... ]")
         model.train()
+        batch_number = len(train_dataloader)
         for e in range(epochs):
             print(f"[ Training epoch: {e + 1} ------------------------------ ]")
             description = f'Fold: {fold_ind} | Epoch: {e + 1} | Batch'
             with tqdm(train_dataloader, miniters=verbose_every, desc=description, disable=False) as progress:
-                for i, (x, y) in enumerate(progress):
-                    step = i + (e + 1) * (len(train_dataloader) // batch_size)
+                for i, (cell_id, x, y) in enumerate(progress):
+                    step = i + (e + 1) * (batch_number // batch_size)
                     # forward pass
                     pred = torch.squeeze(model(x))
                     loss = corr_error(pred, y, normalize=True)
@@ -159,7 +160,7 @@ if __name__ == '__main__':
             print(f"[ Validation is started ... ]")
             with torch.no_grad():
                 with tqdm(valid_dataloader, miniters=verbose_every, desc='Batch', disable=False) as val_progress:
-                    for i, (x, y) in enumerate(val_progress):
+                    for i, (cell_id, x, y) in enumerate(val_progress):
                         pred = torch.squeeze(model(x))
                         # calculate metric
                         err = mse(pred, y)
@@ -173,8 +174,7 @@ if __name__ == '__main__':
                     watcher.is_model_better(monitor=corr,
                                             step=step,
                                             model=model,
-                                            optimizer=model_optimizer,
-                                            criterion=corr_error)
+                                            optimizer=model_optimizer)
 
                     mse.reset()
                     p_corr.reset()
