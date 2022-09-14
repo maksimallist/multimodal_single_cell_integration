@@ -2,14 +2,14 @@ from typing import Callable, Optional, Tuple, Union
 
 import h5py
 import hdf5plugin  # не удалять!
-import pandas as pd
 import torch
 from torch.utils.data import Dataset
 
 
 class FlowDataset(Dataset):
-    _features_name: str = "block0_values"
-    _cell_id_name: str = "axis1"
+    features_name: str = "block0_values"
+    col_name: str = 'block0_items'
+    cell_id_name: str = "axis1"
 
     def __init__(self,
                  features_file: str,
@@ -33,10 +33,10 @@ class FlowDataset(Dataset):
     def get_hdf5_flow(self, file_path: str):
         file_flow = h5py.File(file_path, 'r')
         col_names = list(file_flow[list(file_flow.keys())[0]])
-        assert self._features_name in col_names
-        assert self._cell_id_name in col_names
+        assert self.features_name in col_names
+        assert self.cell_id_name in col_names
 
-        lines, features_shape = file_flow[list(file_flow.keys())[0]][self._features_name].shape
+        lines, features_shape = file_flow[list(file_flow.keys())[0]][self.features_name].shape
         data_flow = file_flow[list(file_flow.keys())[0]]
 
         return data_flow, col_names, (lines, features_shape)
@@ -45,13 +45,13 @@ class FlowDataset(Dataset):
         return len(self.features['axis1'])
 
     def __getitem__(self, item: int) -> Union[Tuple[str, torch.Tensor], Tuple[str, torch.Tensor, torch.Tensor]]:
-        x_cell_id = self.features[self._cell_id_name][item].decode("utf-8")
+        x_cell_id = self.features[self.cell_id_name][item].decode("utf-8")
         if self.targets is not None:
-            y_cell_id = self.targets[self._cell_id_name][item].decode("utf-8")
+            y_cell_id = self.targets[self.cell_id_name][item].decode("utf-8")
             assert x_cell_id == y_cell_id, AssertionError("Несовпадение порядка элементов в списке фичей и таргетов.")
 
-            x = torch.from_numpy(self.features[self._features_name][item])
-            y = torch.from_numpy(self.targets[self._features_name][item])
+            x = torch.from_numpy(self.features[self.features_name][item])
+            y = torch.from_numpy(self.targets[self.features_name][item])
 
             if self.transform:
                 x = self.transform(x)
@@ -62,7 +62,7 @@ class FlowDataset(Dataset):
 
             return x_cell_id, x, y
         else:
-            x = torch.from_numpy(self.features[self._features_name][item])
+            x = torch.from_numpy(self.features[self.features_name][item])
 
             if self.transform:
                 x = self.transform(x)
