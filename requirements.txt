@@ -6,3 +6,4 @@ torchmetrics
 tqdm
 h5py
 hdf5plugin
+tensorboard

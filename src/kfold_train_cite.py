@@ -50,7 +50,7 @@ if __name__ == '__main__':
     # data paths
     train_features_path = root.parent.joinpath('dataset', 'train_cite_inputs.h5')
     train_targets_path = root.parent.joinpath('dataset', 'train_cite_targets.h5')
-    test_features_path = root.joinpath('dataset', 'test_cite_inputs.h5')
+    test_features_path = root.parent.joinpath('dataset', 'test_cite_inputs.h5')
 
     print(f"[ Load the dataset from hard disk ... ]")
     seed = 42
@@ -73,7 +73,7 @@ if __name__ == '__main__':
         shuffle_mode = watcher.rlog('train', shuffle_mode=True)
         train_dataloader = DataLoader(ds_train, batch_size=batch_size, shuffle=shuffle_mode)
         valid_dataloader = DataLoader(ds_eval, batch_size=batch_size, shuffle=shuffle_mode)
-        test_dataloader = DataLoader(test_dataset, batch_size=10, shuffle=False)
+        test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
         print(f"[ Load dataset is complete. ]")
 
         # model
