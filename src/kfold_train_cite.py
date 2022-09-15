@@ -50,6 +50,7 @@ if __name__ == '__main__':
     # data paths
     train_features_path = root.parent.joinpath('dataset', 'train_cite_inputs.h5')
     train_targets_path = root.parent.joinpath('dataset', 'train_cite_targets.h5')
+    test_features_path = root.joinpath('dataset', 'test_cite_inputs.h5')
 
     print(f"[ Load the dataset from hard disk ... ]")
     seed = 42
@@ -57,6 +58,7 @@ if __name__ == '__main__':
     device = torch.device('cuda')
     train_dataset = FlowDataset(features_file=str(train_features_path), targets_file=str(train_targets_path),
                                 transform=add_dimension, device=device)
+    test_dataset = FlowDataset(features_file=str(test_features_path), transform=add_dimension, device=device)
 
     print(f"[ Start K-Flod split training ... ]")
     # ----------------------------------------------------------------------------
@@ -71,6 +73,7 @@ if __name__ == '__main__':
         shuffle_mode = watcher.rlog('train', shuffle_mode=True)
         train_dataloader = DataLoader(ds_train, batch_size=batch_size, shuffle=shuffle_mode)
         valid_dataloader = DataLoader(ds_eval, batch_size=batch_size, shuffle=shuffle_mode)
+        test_dataloader = DataLoader(test_dataset, batch_size=10, shuffle=False)
         print(f"[ Load dataset is complete. ]")
 
         # model
@@ -178,3 +181,28 @@ if __name__ == '__main__':
             print(f"[ Validation is complete. | MSE: {err} | Pearson-corr: {corr} ]")
         # -------------------------------------------------------------------
         watcher.writer.close()
+
+        # -------------------------------------------------------------------
+        print(f"[ Prediction on test set is started ... ]")
+        # load weights of the best model
+        weights_path = watcher.checkpoints_folder.joinpath('best_model', 'best_model.pt')
+        model.load_state_dict(torch.load(weights_path)['model_state_dict'])
+        model.to(device)
+        model.eval()
+
+        # start predictions on test set
+        test_pred, ids = [], []
+        with tqdm(test_dataloader, desc='Batch', disable=False) as progress:
+            for i, (cell_ids, features) in enumerate(progress):
+                ids.extend(cell_ids)
+                p = model(features).detach()
+                p = torch.flatten(p, start_dim=1)
+                p = p.cpu().numpy()
+                test_pred.append(p)
+
+        test_pred = np.vstack(test_pred)
+        pred_file_path = str(watcher.exp_root.joinpath('cite_eval.npy'))
+        ids_path_file = str(watcher.exp_root.joinpath('cite_ids.npy'))
+        np.save(ids_path_file, ids)
+        np.save(pred_file_path, test_pred)
+        print(f"[ Prediction on test set is complete. ]")
