@@ -61,7 +61,7 @@ class Watcher:
 
 
 class ExpWatcher(Watcher):
-    _checkpoints_folder = None
+    checkpoints_folder = None
     _tensorboard_logs = None
 
     def __init__(self, exp_name: str, root: Path, *args, **kwargs):
@@ -82,10 +82,10 @@ class ExpWatcher(Watcher):
     def _experiments_preparation(self):
         self.exp_root.mkdir(parents=True, exist_ok=False)
         # make folder for checkpoints
-        self._checkpoints_folder = self.exp_root.joinpath('checkpoints')
-        self._checkpoints_folder.mkdir()
+        self.checkpoints_folder = self.exp_root.joinpath('checkpoints')
+        self.checkpoints_folder.mkdir()
 
-        self.best_model_folder = self._checkpoints_folder.joinpath('best_model')
+        self.best_model_folder = self.checkpoints_folder.joinpath('best_model')
         self.best_model_folder.mkdir()
         self.best_model_save_path = str(self.best_model_folder.joinpath('best_model.pt'))
 
@@ -95,7 +95,7 @@ class ExpWatcher(Watcher):
         self.writer = SummaryWriter(log_dir=str(self._tensorboard_logs))
 
     def save_model(self, train_step: int, trainable_rule: Module, name: str):
-        model_path = self._checkpoints_folder.joinpath("train_step_" + str(train_step))
+        model_path = self.checkpoints_folder.joinpath("train_step_" + str(train_step))
         model_path.mkdir()
         torch.save(trainable_rule.state_dict(), str(model_path.joinpath(f"{name}.pth")))
 

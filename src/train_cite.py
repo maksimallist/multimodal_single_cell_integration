@@ -51,6 +51,7 @@ if __name__ == '__main__':
     # data paths
     train_features_path = root.joinpath('dataset', 'train_cite_inputs.h5')
     train_targets_path = root.joinpath('dataset', 'train_cite_targets.h5')
+    test_features_path = root.joinpath('dataset', 'test_cite_inputs.h5')
 
     # log paths
     watcher.log("train_dataset", train_features_path=str(train_features_path))
@@ -64,6 +65,7 @@ if __name__ == '__main__':
     print(f"[ Load the dataset from hard disk ... ]")
     train_dataset = FlowDataset(features_file=str(train_features_path), targets_file=str(train_targets_path),
                                 transform=add_dimension, device=device)
+    test_dataset = FlowDataset(features_file=str(test_features_path), transform=add_dimension, device=device)
 
     # create dataloaders
     batch_size = watcher.rlog('train', batch_size=2)
@@ -72,6 +74,7 @@ if __name__ == '__main__':
     train_dataset, valid_dataset = train_val_split(train_dataset, 0.2)
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=shuffle_mode)
     valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=shuffle_mode)
+    test_dataloader = DataLoader(test_dataset, batch_size=10, shuffle=False)
     print(f"[ Load dataset is complete. ]")
 
     # model
@@ -114,33 +117,36 @@ if __name__ == '__main__':
         print(f"[ Training epoch: {e + 1} ------------------------------ ]")
         with tqdm(train_dataloader, miniters=verbose_every, desc='Batch', disable=False) as progress:
             for i, (cell_id, x, y) in enumerate(progress):
-                step = i + (e + 1) * (batch_number // batch_size)
-                # forward pass
-                pred = model(x)
-                loss = corr_error(pred, y, normalize=True)
-                loss = torch.mean(loss)
-                # backward pass
-                model_optimizer.zero_grad()
-                loss.backward()
-                # update weights
-                model_optimizer.step()
-                watcher.add_scalar('learning_rate', scheduler.get_last_lr()[0], step)
+                if i < 1000:
+                    step = i + (e + 1) * (batch_number // batch_size)
+                    # forward pass
+                    pred = model(x)
+                    loss = corr_error(pred, y, normalize=True)
+                    loss = torch.mean(loss)
+                    # backward pass
+                    model_optimizer.zero_grad()
+                    loss.backward()
+                    # update weights
+                    model_optimizer.step()
+                    watcher.add_scalar('learning_rate', scheduler.get_last_lr()[0], step)
 
-                # calculate mse metric
-                err = mse(pred, y)
-                watcher.add_scalar('mse_error', err, step)
+                    # calculate mse metric
+                    err = mse(pred, y)
+                    watcher.add_scalar('mse_error', err, step)
 
-                # calculate Pearson correlation metric
-                for v_x, v_y in zip(pred, y):
-                    p_corr(v_x, v_y)
-                corr = p_corr.compute()
-                watcher.add_scalar('pearson_correlation', corr, step)
+                    # calculate Pearson correlation metric
+                    for v_x, v_y in zip(pred, y):
+                        p_corr(v_x, v_y)
+                    corr = p_corr.compute()
+                    watcher.add_scalar('pearson_correlation', corr, step)
 
-                # log loss
-                loss_n = loss.detach().cpu().numpy()
-                watcher.add_scalar('Loss-Pearson_Correlation', loss_n, step)
-                if i % verbose_every == 0:
-                    print(f"[ Loss: {loss_n} | MSE: {err} | Pearson-corr: {corr} ]")
+                    # log loss
+                    loss_n = loss.detach().cpu().numpy()
+                    watcher.add_scalar('Loss-Pearson_Correlation', loss_n, step)
+                    if i % verbose_every == 0:
+                        print(f"[ Loss: {loss_n} | MSE: {err} | Pearson-corr: {corr} ]")
+                else:
+                    break
 
             err = mse.compute()
             mse.reset()
@@ -159,13 +165,16 @@ if __name__ == '__main__':
         with torch.no_grad():
             with tqdm(valid_dataloader, miniters=verbose_every, desc='Batch', disable=False) as val_progress:
                 for i, (cell_id, x, y) in enumerate(val_progress):
-                    pred = model(x)
-                    # calculate metric
-                    err = mse(pred, y)
-                    # calculate Pearson correlation metric
-                    for v_x, v_y in zip(pred, y):
-                        p_corr(v_x, v_y)
-                    corr = p_corr.compute()
+                    if i < 1000:
+                        pred = model(x)
+                        # calculate metric
+                        err = mse(pred, y)
+                        # calculate Pearson correlation metric
+                        for v_x, v_y in zip(pred, y):
+                            p_corr(v_x, v_y)
+                        corr = p_corr.compute()
+                    else:
+                        break
 
                 err = mse.compute()
                 corr = p_corr.compute().detach().cpu().numpy()
@@ -179,3 +188,28 @@ if __name__ == '__main__':
         print(f"[ Validation is complete. | MSE: {err} | Pearson-corr: {corr} ]")
     # -------------------------------------------------------------------
     watcher.writer.close()
+
+    # -------------------------------------------------------------------
+    print(f"[ Prediction on test set is started ... ]")
+    # load weights of the best model
+    weights_path = watcher.checkpoints_folder.joinpath('best_model', 'best_model.pt')
+    model.load_state_dict(torch.load(weights_path)['model_state_dict'])
+    model.to(device)
+    model.eval()
+
+    # start predictions on test set
+    test_pred, ids = [], []
+    with tqdm(test_dataloader, desc='Batch', disable=False) as progress:
+        for i, (cell_ids, features) in enumerate(progress):
+            ids.extend(cell_ids)
+            p = model(features).detach()
+            p = torch.flatten(p, start_dim=1)
+            p = p.cpu().numpy()
+            test_pred.append(p)
+
+    test_pred = np.vstack(test_pred)
+    pred_file_path = str(watcher.exp_root.joinpath('cite_eval.npy'))
+    ids_path_file = str(watcher.exp_root.joinpath('cite_ids.npy'))
+    np.save(ids_path_file, ids)
+    np.save(pred_file_path, test_pred)
+    print(f"[ Prediction on test set is complete. ]")
