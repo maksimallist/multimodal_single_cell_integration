@@ -80,6 +80,7 @@ class SCCDataset(Dataset):
     meta_names: List[str] = ['day', 'donor', 'cell_type', 'technology']
     meta_keys: List[str] = ['cell_id', 'day', 'donor', 'cell_type', 'technology']
 
+    pos_name: str = 'position'
     index_name: str = 'cell_id'
     target_name: str = 'gene_id'
 
@@ -139,21 +140,19 @@ class SCCDataset(Dataset):
                                               Tuple[torch.Tensor, torch.Tensor, Dict[str, str]]]:
         cell_id = self.features[self.cell_id_name][item].decode("utf-8")
         meta_data = {key: self.metadata[key][cell_id] for key in self.meta_names}
+        meta_data[self.pos_name] = self.features[self.col_name][item].decode("utf-8")
         meta_data[self.index_name] = cell_id
 
-        if self.targets is not None:
-            x = self.features[self.features_name][item]
-            y = self.targets[self.features_name][item]
+        x = self.features[self.features_name][item]
+        if self.transform:
+            x = self.transform(x)
 
-            if self.transform:
-                x = self.transform(x)
+        if self.targets is not None:
+            meta_data[self.target_name] = self.targets[self.col_name][item].decode("utf-8")
+            y = self.targets[self.features_name][item]
             if self.target_transform:
                 y = self.target_transform(y)
 
             return x, y, meta_data
         else:
-            x = self.features[self.features_name][item]
-            if self.transform:
-                x = self.transform(x)
-
             return x, meta_data
