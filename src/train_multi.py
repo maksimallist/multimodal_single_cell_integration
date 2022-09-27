@@ -44,6 +44,20 @@ def train_val_split(dataset, val_volume: float = 0.2):
     return folds[0], folds[1]
 
 
+class EarlyStopping:
+    def __init__(self, patience: int = 10):
+        self.patience = patience
+        self.min_loss = np.inf
+        self.counter = 0
+        self.early_stop = False
+
+    def __call__(self, loss) -> None:
+        if loss > self.min_loss:
+            self.counter += 1
+            if self.counter >= self.patience:
+                self.early_stop = True
+
+
 if __name__ == '__main__':
     root = Path(__file__).absolute().parent.parent
     exp_root = root.joinpath('experiments')
