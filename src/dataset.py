@@ -77,8 +77,10 @@ class FlowDataset(Dataset):
 class SCCDataset(Dataset):
     reserved_names: List[str] = ['train_multi_inputs', 'train_multi_targets', 'train_cite_inputs', 'train_cite_targets',
                                  'test_multi_inputs', 'test_cite_inputs']
+
     meta_names: List[str] = ['day', 'donor', 'cell_type', 'technology']
     meta_keys: List[str] = ['cell_id', 'day', 'donor', 'cell_type', 'technology']
+    meta_unique_vals: Dict = {}
 
     pos_name: str = 'position'
     index_name: str = 'cell_id'
@@ -97,7 +99,7 @@ class SCCDataset(Dataset):
         self.transform = transform
         self.target_transform = target_transform
 
-        self.metadata = pd.read_csv(meta_file, index_col=self.index_name)
+        self.metadata = self.read_metadata(meta_file)
         self.features, self.features_shape = self.get_hdf5_flow(features_file)
 
         if targets_file:
@@ -107,6 +109,13 @@ class SCCDataset(Dataset):
                                f"features_file: {self.features_shape[0]}, targets_file: {self.targets_shape[0]};")
         else:
             self.targets = None
+
+    def read_metadata(self, path: str) -> pd.DataFrame:
+        df = pd.read_csv(path, index_col=self.index_name)
+        for key in self.meta_names:
+            self.meta_unique_vals[key] = list(df[key].unique())
+
+        return df
 
     def get_hdf5_flow(self, file_path: str):
         file_flow = h5py.File(file_path, 'r')
