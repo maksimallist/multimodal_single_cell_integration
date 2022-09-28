@@ -3,6 +3,7 @@ from typing import Callable, Dict, List, Optional, Tuple, Union
 import h5py
 # не удалять! import hdf5plugin !
 import hdf5plugin
+import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import Dataset
@@ -78,6 +79,7 @@ class SCCDataset(Dataset):
     reserved_names: List[str] = ['train_multi_inputs', 'train_multi_targets', 'train_cite_inputs', 'train_cite_targets',
                                  'test_multi_inputs', 'test_cite_inputs']
 
+    meta_transform_names: List[str] = ['day', 'donor', 'cell_type']
     meta_names: List[str] = ['day', 'donor', 'cell_type', 'technology']
     meta_keys: List[str] = ['cell_id', 'day', 'donor', 'cell_type', 'technology']
     meta_unique_vals: Dict = {}
@@ -94,10 +96,12 @@ class SCCDataset(Dataset):
                  meta_file: str,
                  features_file: str,
                  targets_file: Optional[str] = None,
+                 meta_transform: Optional[str] = None,
                  transform: Optional[Callable] = None,
                  target_transform: Optional[Callable] = None):
         self.transform = transform
         self.target_transform = target_transform
+        self.meta_transform = meta_transform
 
         self.metadata = self.read_metadata(meta_file)
         self.features, self.features_shape = self.get_hdf5_flow(features_file)
@@ -116,6 +120,24 @@ class SCCDataset(Dataset):
             self.meta_unique_vals[key] = list(df[key].unique())
 
         return df
+
+    def transform_metalabels(self, meta_dict: Dict, cell_id: str) -> Dict:
+        if self.meta_transform:
+            if self.meta_transform == 'index':
+                for key in self.meta_transform_names:
+                    meta_dict[key] = self.meta_unique_vals[key].index(self.metadata[key][cell_id])
+            elif self.meta_transform == 'one_hot':
+                for key in self.meta_transform_names:
+                    one_hot_vector = np.zeros((len(self.meta_unique_vals[key]),))
+                    one_hot_vector[self.meta_unique_vals[key].index(self.metadata[key][cell_id])] = 1
+                    meta_dict[key] = one_hot_vector
+            else:
+                raise ValueError(f"The argument 'meta_transform' can only take values from a list "
+                                 f"['index', 'one_hot', None], but '{self.meta_transform}' was found.")
+        else:
+            meta_dict = {key: self.metadata[key][cell_id] for key in self.meta_names}
+
+        return meta_dict
 
     def get_hdf5_flow(self, file_path: str):
         file_flow = h5py.File(file_path, 'r')
@@ -148,9 +170,8 @@ class SCCDataset(Dataset):
     def __getitem__(self, item: int) -> Union[Tuple[torch.Tensor, Dict[str, str]],
                                               Tuple[torch.Tensor, torch.Tensor, Dict[str, str]]]:
         cell_id = self.features[self.cell_id_name][item].decode("utf-8")
-        meta_data = {key: self.metadata[key][cell_id] for key in self.meta_names}
-        meta_data[self.pos_name] = self.features[self.col_name][item].decode("utf-8")
-        meta_data[self.index_name] = cell_id
+        meta_data = {self.index_name: cell_id, self.pos_name: self.features[self.col_name][item].decode("utf-8")}
+        meta_data = self.transform_metalabels(meta_data, cell_id)
 
         x = self.features[self.features_name][item]
         if self.transform:
