@@ -306,7 +306,7 @@ class CiteClsHead(nn.Module):
         t4 = self.activation(self.l4(dt3))
         dt4 = self.dropout_4(t4)
 
-        tc = torch.concat([dt1, dt2, dt3, dt4], dim=1)
+        tc = torch.cat([dt1, dt2, dt3, dt4], dim=1)
         dtf = self.dropout_5(tc)
 
         logits = self.activation(self.l5(dtf))
