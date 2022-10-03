@@ -1,39 +1,29 @@
-import gc
 from pathlib import Path
 
 import numpy as np
-from tqdm import tqdm
+import pandas as pd
+# import pickle
 
 if __name__ == '__main__':
     # determine dataset folder and get column names
-    data_path = Path('/home/mks/PycharmProjects/multimodal_single_cell_integration/dataset')
     submissions_path = Path('/home/mks/PycharmProjects/multimodal_single_cell_integration/submissions/')
-
-    # determine experiments folder
-    exp_root = Path('/home/mks/PycharmProjects/multimodal_single_cell_integration/experiments/')
-
-    # Make cite predictions
-    # -----------------------------------------------------------------------------------------------------------------
-    print(f"[ Read cite predictions ... ]")
-    test_pred = np.load(str(exp_root.joinpath('check_fix_c-15.09.2022-14.12', 'cite_eval.npy')), mmap_mode='r')
-    test_pred = test_pred.flatten()
-    with open(str(submissions_path.joinpath('test.csv')), 'w') as f:
-        f.write("row_id,target\n")
-        for i, x in enumerate(tqdm(test_pred)):
-            f.write(','.join([str(i), str(x)]) + '\n')
-
-    del [test_pred]
-    gc.collect()
-    print(f"[ Reading cite predictions complete. ]")
-
     # -----------------------------------------------------------------------------------------------------------------
     print(f"[ Read mutiome predictions ... ]")
-    test_pred = np.load(str(exp_root.joinpath('check_fix_m-14.09.2022-20.16', 'multi_eval.npy')), mmap_mode='r')
-    test_pred = test_pred.flatten()
-    with open(str(submissions_path.joinpath('test.csv')), 'a') as f:
-        for i, x in enumerate(tqdm(test_pred)):
-            f.write(','.join([str(i), str(x)]) + '\n')
+    multiome_sub = str(submissions_path.joinpath('multiome', 'kaggle', 'w-sparce-m-tsvd-ridge_notebook.csv'))
+    multiome_sub = pd.read_csv(multiome_sub, index_col='row_id')
+    # -----------------------------------------------------------------------------------------------------------------
+    print(f"[ Read cite predictions ... ]")
+    cite_sub = np.load(str(submissions_path.joinpath('cite', 'my', 'conv_mse_corr.npy')), mmap_mode='r')
 
-    del [test_pred]
-    gc.collect()
-    print(f"[ Reading mutiome predictions complete. ]")
+    # with open(str(submissions_path.joinpath('cite', 'kaggle', 'tune-lgbm-only-final.pickle')), 'rb') as f:
+    #     cite_sub = pickle.load(f)
+
+    cite_sub = cite_sub.flatten()
+
+    print(f"[ Make submission ... ]")
+    multiome_sub['target'].loc[:cite_sub.shape[0] - 1] = cite_sub
+    # assert not multiome_sub.isna().any()
+    save_path = str(submissions_path.joinpath('both',
+                                              'conv_mse_corr-w-sparce-m-tsvd-ridge_notebook.csv'))
+    multiome_sub.to_csv(save_path)
+    print(f"[ Make submission is done. ]")
