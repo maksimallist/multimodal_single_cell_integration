@@ -189,7 +189,7 @@ class FSCCDataset(Dataset):
         if self.transform:
             x = self.transform(x)
 
-        meta_data['features'] = x
+        meta_data[self.file_types[0]] = x
 
         if self.dataflows[self.task][self.mode].get('targets'):
             targets = self.dataflows[self.task][self.mode]['targets']
@@ -199,7 +199,7 @@ class FSCCDataset(Dataset):
             if self.target_transform:
                 y = self.target_transform(y)
 
-            meta_data['targets'] = y
+            meta_data[self.file_types[1]] = y
 
             return meta_data
         else:
@@ -263,7 +263,7 @@ class FSCCDataset(Dataset):
             cond_index = set(self.metadata[final_cond].index)
             self.data_ids = list(cond_index & ids)
 
-    def reset(self, task: Optional[str] = None, mode: Optional[str] = None):
+    def rebase(self, task: Optional[str] = None, mode: Optional[str] = None):
         if task is not None:
             self.task = task
         if mode is not None:
@@ -271,3 +271,6 @@ class FSCCDataset(Dataset):
 
         self._read_task_dataset(self.dataset_path)
         self.data_ids = self._set_data_ids()
+
+    def set_length(self, length: int) -> None:
+        self.data_ids = self.data_ids[:length]
