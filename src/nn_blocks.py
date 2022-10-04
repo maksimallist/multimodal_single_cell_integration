@@ -180,30 +180,30 @@ class SimpleDecoder(nn.Module):
     def __init__(self, conf: dataclass):
         super().__init__()
         # create conv tower | input_shape = (bs, c=1, h=484)
-        self.conv1 = SimpleDecoderBlock(conf.conv1['in_filters'],
-                                        conf.conv1['out_filters'],
-                                        conf.conv1['kernel_size'],
-                                        conf.conv1['stride'],
-                                        conf.conv1['padding'],
-                                        conf.conv1['output_padding'])
-        self.conv2 = SimpleDecoderBlock(conf.conv2['in_filters'],
-                                        conf.conv2['out_filters'],
-                                        conf.conv2['kernel_size'],
-                                        conf.conv2['stride'],
-                                        conf.conv2['padding'],
-                                        conf.conv2['output_padding'])
-        self.conv3 = SimpleDecoderBlock(conf.conv3['in_filters'],
-                                        conf.conv3['out_filters'],
-                                        conf.conv3['kernel_size'],
-                                        conf.conv3['stride'],
-                                        conf.conv3['padding'],
-                                        conf.conv3['output_padding'])
-        self.conv4 = SimpleDecoderBlock(conf.conv4['in_filters'],
-                                        conf.conv4['out_filters'],
-                                        conf.conv4['kernel_size'],
-                                        conf.conv4['stride'],
-                                        conf.conv4['padding'],
-                                        conf.conv4['output_padding'])
+        self.conv1 = SimpleDecoderBlock(conf.conv1_in_filters,
+                                        conf.conv1_out_filters,
+                                        conf.conv1_kernel_size,
+                                        conf.conv1_stride,
+                                        conf.conv1_padding,
+                                        conf.conv1_output_padding)
+        self.conv2 = SimpleDecoderBlock(conf.conv2_in_filters,
+                                        conf.conv2_out_filters,
+                                        conf.conv2_kernel_size,
+                                        conf.conv2_stride,
+                                        conf.conv2_padding,
+                                        conf.conv2_output_padding)
+        self.conv3 = SimpleDecoderBlock(conf.conv3_in_filters,
+                                        conf.conv3_out_filters,
+                                        conf.conv3_kernel_size,
+                                        conf.conv3_stride,
+                                        conf.conv3_padding,
+                                        conf.conv3_output_padding)
+        self.conv4 = SimpleDecoderBlock(conf.conv4_in_filters,
+                                        conf.conv4_out_filters,
+                                        conf.conv4_kernel_size,
+                                        conf.conv4_stride,
+                                        conf.conv4_padding,
+                                        conf.conv4_output_padding)
 
     def forward(self, input_tensor: torch.FloatTensor) -> torch.FloatTensor:
         x = self.conv1(input_tensor)
@@ -218,30 +218,30 @@ class Decoder(nn.Module):
     def __init__(self, conf: dataclass):
         super().__init__()
         # create conv tower | input_shape = (bs, c=1, h=484)
-        self.conv1 = ResAttDecoderBlock(conf.conv1['in_filters'],
-                                        conf.conv1['out_filters'],
-                                        conf.conv1['kernel_size'],
-                                        conf.conv1['stride'],
-                                        conf.conv1['padding'],
-                                        conf.conv1['output_padding'])
-        self.conv2 = ResAttDecoderBlock(conf.conv2['in_filters'],
-                                        conf.conv2['out_filters'],
-                                        conf.conv2['kernel_size'],
-                                        conf.conv2['stride'],
-                                        conf.conv2['padding'],
-                                        conf.conv2['output_padding'])
-        self.conv3 = ResAttDecoderBlock(conf.conv3['in_filters'],
-                                        conf.conv3['out_filters'],
-                                        conf.conv3['kernel_size'],
-                                        conf.conv3['stride'],
-                                        conf.conv3['padding'],
-                                        conf.conv3['output_padding'])
-        self.conv4 = ResAttDecoderBlock(conf.conv4['in_filters'],
-                                        conf.conv4['out_filters'],
-                                        conf.conv4['kernel_size'],
-                                        conf.conv4['stride'],
-                                        conf.conv4['padding'],
-                                        conf.conv4['output_padding'])
+        self.conv1 = ResAttDecoderBlock(conf.conv1_in_filters,
+                                        conf.conv1_out_filters,
+                                        conf.conv1_kernel_size,
+                                        conf.conv1_stride,
+                                        conf.conv1_padding,
+                                        conf.conv1_output_padding)
+        self.conv2 = ResAttDecoderBlock(conf.conv2_in_filters,
+                                        conf.conv2_out_filters,
+                                        conf.conv2_kernel_size,
+                                        conf.conv2_stride,
+                                        conf.conv2_padding,
+                                        conf.conv2_output_padding)
+        self.conv3 = ResAttDecoderBlock(conf.conv3_in_filters,
+                                        conf.conv3_out_filters,
+                                        conf.conv3_kernel_size,
+                                        conf.conv3_stride,
+                                        conf.conv3_padding,
+                                        conf.conv3_output_padding)
+        self.conv4 = ResAttDecoderBlock(conf.conv4_in_filters,
+                                        conf.conv4_out_filters,
+                                        conf.conv4_kernel_size,
+                                        conf.conv4_stride,
+                                        conf.conv4_padding,
+                                        conf.conv4_output_padding)
 
     def forward(self, input_tensor: torch.FloatTensor) -> torch.FloatTensor:
         x = self.conv1(input_tensor)

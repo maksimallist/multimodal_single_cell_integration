@@ -18,10 +18,33 @@ class MultiModelConf:
     dec_in: int = 484
     add_bottleneck: bool = False
     # decoder atts
-    conv1 = {"in_filters": 1, "out_filters": 16, "kernel_size": 14, "stride": 3, "padding": 0, "output_padding": 0}
-    conv2 = {"in_filters": 16, "out_filters": 32, "kernel_size": 4, "stride": 2, "padding": 1, "output_padding": 1}
-    conv3 = {"in_filters": 32, "out_filters": 16, "kernel_size": 4, "stride": 4, "padding": 1, "output_padding": 1}
-    conv4 = {"in_filters": 16, "out_filters": 1, "kernel_size": 5, "stride": 2, "padding": 0, "output_padding": 1}
+    conv1_in_filters: int = 1
+    conv1_out_filters: int = 16
+    conv1_kernel_size: int = 14
+    conv1_stride: int = 3
+    conv1_padding: int = 0
+    conv1_output_padding: int = 0
+
+    conv2_in_filters: int = 16
+    conv2_out_filters: int = 32
+    conv2_kernel_size: int = 4
+    conv2_stride: int = 2
+    conv2_padding: int = 1
+    conv2_output_padding: int = 1
+
+    conv3_in_filters: int = 32
+    conv3_out_filters: int = 16
+    conv3_kernel_size: int = 4
+    conv3_stride: int = 4
+    conv3_padding: int = 1
+    conv3_output_padding: int = 1
+
+    conv4_in_filters: int = 16
+    conv4_out_filters: int = 1
+    conv4_kernel_size: int = 5
+    conv4_stride: int = 2
+    conv4_padding: int = 0
+    conv4_output_padding: int = 1
 
 
 class MultiModel(nn.Module):
