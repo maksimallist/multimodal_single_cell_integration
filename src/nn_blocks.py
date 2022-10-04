@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Tuple, Callable
+from typing import Callable
 
 import torch
 from einops.layers.torch import Rearrange
@@ -89,61 +89,6 @@ class EncoderBlock(nn.Module):
         return out
 
 
-@dataclass
-class EncoderConfig:
-    model_type = "Encoder"
-
-    def __init__(self, filters: Tuple, kernels: Tuple):
-        super().__init__()
-        self.filters = filters
-        self.kernels = kernels
-
-
-class Encoder(nn.Module):
-    def __init__(self, config: dataclass):
-        super().__init__()
-        # create conv tower
-        conv_layers = []
-        for i, (dim_in, dim_out, ks) in enumerate(zip(config.filters[:-1], config.filters[1:], config.kernels)):
-            if i == 0:
-                conv_layers.append(EncoderBlock(dim_in, dim_out, kernel_size=ks, use_batchnorm=False))
-            else:
-                conv_layers.append(EncoderBlock(dim_in, dim_out, kernel_size=ks))
-
-        self.conv_tower = nn.Sequential(*conv_layers)
-
-    def forward(self, input_tensor: torch.FloatTensor) -> torch.FloatTensor:
-        return self.conv_tower(input_tensor)  # 448 size
-
-
-class SimpleDecoderBlock(nn.Module):
-    def __init__(self,
-                 in_filters: int,
-                 out_filters: int,
-                 kernel_size: int,
-                 stride: int,
-                 padding: int,
-                 output_padding: int,
-                 use_batchnorm: bool = True,
-                 gelu_weight: float = 1.702):
-        super().__init__()
-        self.gelu_weight = gelu_weight
-        self.use_batchnorm = use_batchnorm
-
-        # first block
-        self.conv = nn.ConvTranspose1d(in_filters, out_filters, kernel_size, stride, padding, output_padding)
-        if use_batchnorm:
-            self.batch_norm = nn.BatchNorm1d(out_filters)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.conv(x)
-        if self.use_batchnorm:
-            x = self.batch_norm(x)
-        out = torch.sigmoid(self.gelu_weight * x) * x
-
-        return out
-
-
 class ResAttDecoderBlock(nn.Module):
     def __init__(self,
                  in_filters: int,
@@ -189,89 +134,6 @@ class ResAttDecoderBlock(nn.Module):
         return out
 
 
-# todo: add dataclass with config
-class SimpleDecoder(nn.Module):
-    def __init__(self):
-        super().__init__()
-        # create conv tower | input_shape = (bs, c=1, h=484)
-        self.conv1 = SimpleDecoderBlock(1, 16, kernel_size=14, stride=3, padding=0, output_padding=0)
-        self.conv2 = SimpleDecoderBlock(16, 32, kernel_size=4, stride=2, padding=1, output_padding=1)
-        self.conv3 = SimpleDecoderBlock(32, 16, kernel_size=4, stride=4, padding=1, output_padding=1)
-        self.conv4 = SimpleDecoderBlock(16, 1, kernel_size=5, stride=2, padding=0, output_padding=1)
-
-    def forward(self, input_tensor: torch.FloatTensor) -> torch.FloatTensor:
-        x = self.conv1(input_tensor)
-        x = self.conv2(x)
-        x = self.conv3(x)
-        x = self.conv4(x)
-
-        return x
-
-
-class Decoder(nn.Module):
-    def __init__(self):
-        super().__init__()
-        # create conv tower | input_shape = (bs, c=1, h=484)
-        self.conv1 = ResAttDecoderBlock(1, 16, kernel_size=14, stride=3, padding=0, output_padding=0)
-        self.conv2 = ResAttDecoderBlock(16, 32, kernel_size=4, stride=2, padding=1, output_padding=1)
-        self.conv3 = ResAttDecoderBlock(32, 16, kernel_size=4, stride=4, padding=1, output_padding=1)
-        self.conv4 = ResAttDecoderBlock(16, 1, kernel_size=5, stride=2, padding=0, output_padding=1)
-
-    def forward(self, input_tensor: torch.FloatTensor) -> torch.FloatTensor:
-        x = self.conv1(input_tensor)
-        x = self.conv2(x)
-        x = self.conv3(x)
-        x = self.conv4(x)
-
-        return x
-
-
-class MultiModel(nn.Module):
-    def __init__(self, enc_conf, enc_out: int, dec_in: int, add_bottleneck: bool = False):
-        super().__init__()
-        self.encoder = Encoder(enc_conf)
-        self.decoder = Decoder()
-
-        # bottleneck
-        self.bottleneck = nn.Linear(in_features=enc_out, out_features=dec_in)
-        self.add_layer = add_bottleneck
-        if add_bottleneck:
-            self.bottleneck2 = nn.Linear(in_features=dec_in, out_features=dec_in)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        enc_out = self.encoder(x)
-        h = functional.relu(self.bottleneck(enc_out))
-        if self.add_layer:
-            h = functional.relu(self.bottleneck2(h))
-
-        logits = self.decoder(h)
-
-        return functional.silu(logits)
-
-
-class MultiModelSD(nn.Module):
-    def __init__(self, enc_conf, enc_out: int, dec_in: int, add_bottleneck: bool = False):
-        super().__init__()
-        self.encoder = Encoder(enc_conf)
-        self.decoder = SimpleDecoder()
-
-        # bottleneck
-        self.bottleneck = nn.Linear(in_features=enc_out, out_features=dec_in)
-        self.add_layer = add_bottleneck
-        if add_bottleneck:
-            self.bottleneck2 = nn.Linear(in_features=dec_in, out_features=dec_in)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        enc_out = self.encoder(x)
-        h = functional.relu(self.bottleneck(enc_out))
-        if self.add_layer:
-            h = functional.relu(self.bottleneck2(h))
-
-        logits = self.decoder(h)
-
-        return functional.silu(logits)
-
-
 class CiteClsHead(nn.Module):
     def __init__(self, input_dim: int):  # 345
         super(CiteClsHead, self).__init__()
@@ -314,15 +176,122 @@ class CiteClsHead(nn.Module):
         return logits
 
 
-class CiteModel(nn.Module):
-    def __init__(self, enc_conf, enc_out: int):
+class SimpleDecoder(nn.Module):
+    def __init__(self, conf: dataclass):
         super().__init__()
-        self.encoder = Encoder(enc_conf)
-        self.decoder = CiteClsHead(input_dim=enc_out)
+        # create conv tower | input_shape = (bs, c=1, h=484)
+        self.conv1 = SimpleDecoderBlock(conf.conv1['in_filters'],
+                                        conf.conv1['out_filters'],
+                                        conf.conv1['kernel_size'],
+                                        conf.conv1['stride'],
+                                        conf.conv1['padding'],
+                                        conf.conv1['output_padding'])
+        self.conv2 = SimpleDecoderBlock(conf.conv2['in_filters'],
+                                        conf.conv2['out_filters'],
+                                        conf.conv2['kernel_size'],
+                                        conf.conv2['stride'],
+                                        conf.conv2['padding'],
+                                        conf.conv2['output_padding'])
+        self.conv3 = SimpleDecoderBlock(conf.conv3['in_filters'],
+                                        conf.conv3['out_filters'],
+                                        conf.conv3['kernel_size'],
+                                        conf.conv3['stride'],
+                                        conf.conv3['padding'],
+                                        conf.conv3['output_padding'])
+        self.conv4 = SimpleDecoderBlock(conf.conv4['in_filters'],
+                                        conf.conv4['out_filters'],
+                                        conf.conv4['kernel_size'],
+                                        conf.conv4['stride'],
+                                        conf.conv4['padding'],
+                                        conf.conv4['output_padding'])
+
+    def forward(self, input_tensor: torch.FloatTensor) -> torch.FloatTensor:
+        x = self.conv1(input_tensor)
+        x = self.conv2(x)
+        x = self.conv3(x)
+        x = self.conv4(x)
+
+        return x
+
+
+class Decoder(nn.Module):
+    def __init__(self, conf: dataclass):
+        super().__init__()
+        # create conv tower | input_shape = (bs, c=1, h=484)
+        self.conv1 = ResAttDecoderBlock(conf.conv1['in_filters'],
+                                        conf.conv1['out_filters'],
+                                        conf.conv1['kernel_size'],
+                                        conf.conv1['stride'],
+                                        conf.conv1['padding'],
+                                        conf.conv1['output_padding'])
+        self.conv2 = ResAttDecoderBlock(conf.conv2['in_filters'],
+                                        conf.conv2['out_filters'],
+                                        conf.conv2['kernel_size'],
+                                        conf.conv2['stride'],
+                                        conf.conv2['padding'],
+                                        conf.conv2['output_padding'])
+        self.conv3 = ResAttDecoderBlock(conf.conv3['in_filters'],
+                                        conf.conv3['out_filters'],
+                                        conf.conv3['kernel_size'],
+                                        conf.conv3['stride'],
+                                        conf.conv3['padding'],
+                                        conf.conv3['output_padding'])
+        self.conv4 = ResAttDecoderBlock(conf.conv4['in_filters'],
+                                        conf.conv4['out_filters'],
+                                        conf.conv4['kernel_size'],
+                                        conf.conv4['stride'],
+                                        conf.conv4['padding'],
+                                        conf.conv4['output_padding'])
+
+    def forward(self, input_tensor: torch.FloatTensor) -> torch.FloatTensor:
+        x = self.conv1(input_tensor)
+        x = self.conv2(x)
+        x = self.conv3(x)
+        x = self.conv4(x)
+
+        return x
+
+
+class SimpleDecoderBlock(nn.Module):
+    def __init__(self,
+                 in_filters: int,
+                 out_filters: int,
+                 kernel_size: int,
+                 stride: int,
+                 padding: int,
+                 output_padding: int,
+                 use_batchnorm: bool = True,
+                 gelu_weight: float = 1.702):
+        super().__init__()
+        self.gelu_weight = gelu_weight
+        self.use_batchnorm = use_batchnorm
+
+        # first block
+        self.conv = nn.ConvTranspose1d(in_filters, out_filters, kernel_size, stride, padding, output_padding)
+        if use_batchnorm:
+            self.batch_norm = nn.BatchNorm1d(out_filters)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        enc_out = self.encoder(x)
-        enc_out = torch.squeeze(enc_out)
-        logits = self.decoder(enc_out)
+        x = self.conv(x)
+        if self.use_batchnorm:
+            x = self.batch_norm(x)
+        out = torch.sigmoid(self.gelu_weight * x) * x
 
-        return logits
+        return out
+
+
+class Encoder(nn.Module):
+    def __init__(self, conf: dataclass):
+        super().__init__()
+        # create conv tower
+        conv_layers = []
+        for i, (dim_in, dim_out, ks) in enumerate(zip(conf.filters[:-1], conf.filters[1:], conf.kernels)):
+            if i == 0:
+                conv_layers.append(EncoderBlock(dim_in, dim_out, kernel_size=ks, use_batchnorm=False))
+            else:
+                conv_layers.append(EncoderBlock(dim_in, dim_out, kernel_size=ks))
+
+        self.conv_tower = nn.Sequential(*conv_layers)
+
+    def forward(self, input_tensor: torch.FloatTensor) -> torch.FloatTensor:
+        return self.conv_tower(input_tensor)  # 448 size

@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 from src.common import add_dimension, pearson_corr_loss, train_val_split
 from src.dataset import FlowDataset
-from src.model import EncoderConfig, CiteModel
+from src.models import CiteModel, CiteModelConf
 from src.watchers import ExpWatcher
 
 if __name__ == '__main__':
@@ -48,12 +48,7 @@ if __name__ == '__main__':
 
     # model
     model_name = watcher.rlog('model', name='enc&reg_head')
-    encoder_filters = watcher.rlog('model', encoder_filters=(1, 32, 64, 128, 64, 32, 1))
-    encoder_kernels = watcher.rlog('model', encoder_kernels=(15, 5, 5, 5, 5, 3))
-    enc_out = watcher.rlog('model', encoder_out=345)
-
-    encoder_conf = EncoderConfig(filters=encoder_filters, kernels=encoder_kernels)
-    model = CiteModel(encoder_conf, enc_out=enc_out).to(device)
+    model = CiteModel(CiteModelConf()).to(device)
     p_num = 0
     for p in model.parameters():
         p_num += np.prod(np.array(p.shape))

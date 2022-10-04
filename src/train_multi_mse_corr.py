@@ -8,8 +8,9 @@ from torch.utils.data import DataLoader
 from torchmetrics import MeanSquaredError, PearsonCorrCoef
 from tqdm import tqdm
 
+from src.common import add_dimension, pearson_corr_loss, train_val_split
 from src.dataset import FlowDataset
-from src.model import EncoderConfig, MultiModel
+from src.models import MultiModel, MultiModelConf
 from src.watchers import ExpWatcher
 
 if __name__ == '__main__':
@@ -47,14 +48,7 @@ if __name__ == '__main__':
 
     # model
     model_name = watcher.rlog('model', name='enc&reg_head')
-    encoder_filters = watcher.rlog('model', encoder_filters=(1, 8, 8, 32, 128, 512, 128, 32, 8, 1))
-    encoder_kernels = watcher.rlog('model', encoder_kernels=(15, 5, 5, 5, 5, 5, 5, 5, 3))
-    enc_out = watcher.rlog('model', encoder_out=448)
-    dec_in = watcher.rlog('model', decoder_in=484)
-    channels = watcher.rlog('model', channels=1)
-
-    encoder_conf = EncoderConfig(filters=encoder_filters, kernels=encoder_kernels)
-    model = MultiModel(encoder_conf, enc_out=enc_out, dec_in=dec_in).to(device)
+    model = MultiModel(MultiModelConf()).to(device)
     p_num = 0
     for p in model.parameters():
         p_num += np.prod(np.array(p.shape))
@@ -97,7 +91,7 @@ if __name__ == '__main__':
                 pred = torch.squeeze(model(x))
 
                 mse_tensor = mse_loss(pred, y)
-                corr_tensor = torch.mean(corr_loss(pred, y, normalize=True))
+                corr_tensor = torch.mean(pearson_corr_loss(pred, y, normalize=True))
                 loss = 0.5 * mse_tensor + 0.5 * corr_tensor
 
                 # backward pass
