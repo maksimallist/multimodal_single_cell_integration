@@ -179,8 +179,7 @@ class FSCCDataset(Dataset):
     def __len__(self):
         return len(self.data_ids)
 
-    def __getitem__(self, item: int) -> Union[Tuple[torch.Tensor, Dict[str, str]],
-                                              Tuple[torch.Tensor, torch.Tensor, Dict[str, str]]]:
+    def __getitem__(self, item: int) -> Dict:
         cell_id = self.data_ids[item]
         features = self.dataflows[self.task][self.mode]['inputs']
         meta_data = {self.index_name: cell_id, self.pos_name: features[self.col_name][item].decode("utf-8")}
@@ -190,16 +189,21 @@ class FSCCDataset(Dataset):
         if self.transform:
             x = self.transform(x)
 
+        meta_data['features'] = x
+
         if self.dataflows[self.task][self.mode].get('targets'):
             targets = self.dataflows[self.task][self.mode]['targets']
             meta_data[self.target_name] = targets[self.col_name][item].decode("utf-8")
             y = targets[self.features_name][item]
+
             if self.target_transform:
                 y = self.target_transform(y)
 
-            return x, y, meta_data
+            meta_data['targets'] = y
+
+            return meta_data
         else:
-            return x, meta_data
+            return meta_data
 
     def get_hdf5_flow(self, file_path: str):
         file_flow = h5py.File(file_path, 'r')
