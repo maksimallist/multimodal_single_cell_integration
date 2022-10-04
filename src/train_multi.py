@@ -8,55 +8,10 @@ from torch.utils.data import DataLoader
 from torchmetrics import MeanSquaredError, PearsonCorrCoef
 from tqdm import tqdm
 
+from src.common import add_dimension, pearson_corr_loss, train_val_split
 from src.dataset import FlowDataset
 from src.model import EncoderConfig, MultiModel
 from src.watchers import ExpWatcher
-
-
-def corr_error(predict: torch.Tensor, target: torch.Tensor, normalize: bool = True) -> torch.Tensor:
-    predict = predict - torch.mean(predict, dim=1).unsqueeze(1)
-    target = target - torch.mean(target, dim=1).unsqueeze(1)
-    loss_tensor = -torch.sum(predict * target, dim=1) / (target.shape[-1] - 1)  # minus because we want gradient ascend
-
-    if normalize:
-        s1 = torch.sqrt(torch.sum(predict * predict, dim=1) / (predict.shape[-1] - 1))
-        s2 = torch.sqrt(torch.sum(target * target, dim=1) / (target.shape[-1] - 1))
-        loss_tensor = loss_tensor / s1 / s2
-
-    return loss_tensor
-
-
-def add_dimension(tensor: torch.Tensor, dim: int = 0) -> torch.Tensor:
-    return torch.unsqueeze(tensor, dim=dim)
-
-
-def kfold_split(dataset, folds: int):
-    fold_sizes = [len(dataset) // folds] * (folds - 1) + [len(dataset) // folds + len(dataset) % folds]
-    ds_folds = torch.utils.data.random_split(dataset, fold_sizes, generator=torch.Generator().manual_seed(42))
-    for fold in range(folds):
-        yield torch.utils.data.ConcatDataset(ds_folds[:fold] + ds_folds[fold + 1:]), ds_folds[fold]
-
-
-def train_val_split(dataset, val_volume: float = 0.2):
-    train_examples = len(dataset)
-    val_num = int(train_examples * val_volume)
-    folds = torch.utils.data.random_split(dataset, [train_examples - val_num, val_num], generator=torch.Generator())
-    return folds[0], folds[1]
-
-
-class EarlyStopping:
-    def __init__(self, patience: int = 10):
-        self.patience = patience
-        self.min_loss = np.inf
-        self.counter = 0
-        self.early_stop = False
-
-    def __call__(self, loss) -> None:
-        if loss > self.min_loss:
-            self.counter += 1
-            if self.counter >= self.patience:
-                self.early_stop = True
-
 
 if __name__ == '__main__':
     root = Path(__file__).absolute().parent.parent
@@ -137,7 +92,7 @@ if __name__ == '__main__':
                     step = i + (e + 1) * (batch_number // batch_size)
                     # forward pass
                     pred = torch.squeeze(model(x))
-                    loss = corr_error(pred, y, normalize=True)
+                    loss = pearson_corr_loss(pred, y, normalize=True)
                     loss = torch.mean(loss)
                     # backward pass
                     model_optimizer.zero_grad()
