@@ -4,6 +4,10 @@ import numpy as np
 import torch
 
 
+def dist_standardization(x: np.array) -> np.array:
+    return (x - np.mean(x)) / np.std(x)
+
+
 def get_cls_by_name(name: str) -> type:
     """Get class by its name and module path.
     Args:
@@ -30,6 +34,10 @@ def get_bite_pos_emb(digit: int, pad_len: int, pad_side: str = 'right') -> np.ar
                              f"but {pad_side} was found.")
 
     return byte_array
+
+
+def get_index_from_bin(x: np.array):
+    return int("".join(str(i) for i in x), 2)
 
 
 def pearson_corr_loss(predict: torch.Tensor, target: torch.Tensor, normalize: bool = True) -> torch.Tensor:

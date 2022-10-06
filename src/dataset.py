@@ -182,7 +182,7 @@ class FSCCDataset(Dataset):
     def __getitem__(self, item: int) -> Dict:
         cell_id = self.data_ids[item]
         features = self.dataflows[self.task][self.mode]['inputs']
-        meta_data = {self.index_name: cell_id, self.pos_name: features[self.col_name][item].decode("utf-8")}
+        meta_data = {self.index_name: cell_id}  # , self.pos_name: features[self.col_name][item].decode("utf-8")
         meta_data = self._transform_metalabels(meta_data, cell_id)
 
         x = features[self.features_name][item]
@@ -193,7 +193,7 @@ class FSCCDataset(Dataset):
 
         if self.dataflows[self.task][self.mode].get('targets'):
             targets = self.dataflows[self.task][self.mode]['targets']
-            meta_data[self.target_name] = targets[self.col_name][item].decode("utf-8")
+            # meta_data[self.target_name] = targets[self.cell_id_name][item].decode("utf-8")
             y = targets[self.features_name][item]
 
             if self.target_transform:
