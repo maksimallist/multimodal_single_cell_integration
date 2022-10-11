@@ -1,5 +1,7 @@
 from dataclasses import dataclass
+from typing import Callable, Optional, Tuple
 
+import numpy as np
 import torch
 from torch import nn
 from torch.nn import functional
@@ -113,3 +115,248 @@ class CiteModel(nn.Module):
         logits = self.decoder(enc_out)
 
         return logits
+
+
+# ------------------------------------------------- Burtsev model -----------------------------------------------------
+
+
+@dataclass
+class BurtsevEncoderConf:
+    input_shape: tuple
+    activation: Callable
+    input_channels = [(1, 32), (64, 128), (128, 128), (128, 256), (256, 128)]
+    out_channels = [(32, 64), (128, 128), (128, 128), (256, 256), (128, 128)]
+    kernels = [(5, 5), (3, 3), (3, 3), (3, 3), (3, 3)]
+    pooling = [2, 2, 2, 2, 2]
+
+
+class BEncBlock(nn.Module):
+    def __init__(self,
+                 input_shape: Tuple[int, int],
+                 activation: Callable,
+                 pool: int,
+                 in_c: Tuple[int, int],
+                 out_c: Tuple[int, int],
+                 kernels: Tuple[int, int]):
+        super().__init__()
+        self.activation = activation
+
+        self.conv1 = nn.Conv2d(in_c[0], out_c[0], kernels[0])
+        out_h, out_w = self.calc_out_shape(input_shape, kernels[0])
+        self.norm1 = nn.LayerNorm([out_c[0], out_h, out_w])
+
+        self.conv2 = nn.Conv2d(in_c[1], out_c[1], kernels[1])
+        out_h, out_w = self.calc_out_shape((out_h, out_w), kernels[1])
+        self.norm2 = nn.LayerNorm([out_c[1], out_h, out_w])
+
+        self.pool = nn.AvgPool2d(pool)
+        self.block_out_shape = (out_h // pool, out_w // pool)
+
+    @staticmethod
+    def calc_out_shape(in_shape: Tuple[int, int], kernel_size: int) -> Tuple[int, int]:
+        return in_shape[0] - (kernel_size // 2) * 2, in_shape[1] - (kernel_size // 2) * 2
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        o = self.conv1(x)
+        o = self.norm1(o)
+        o = self.activation(o)
+
+        o = self.conv2(o)
+        o = self.norm2(o)
+        o = self.activation(o)
+
+        out = self.pool(o)
+
+        return out
+
+
+class BurtsevModelEncoder(nn.Module):
+    def __init__(self, conf: BurtsevEncoderConf):
+        super().__init__()
+        self.activation = conf.activation
+        self.conv_block1 = BEncBlock(input_shape=conf.input_shape,
+                                     activation=conf.activation,
+                                     pool=conf.pooling[0],
+                                     in_c=conf.input_channels[0],
+                                     out_c=conf.out_channels[0],
+                                     kernels=conf.kernels[0])
+        self.conv_block2 = BEncBlock(input_shape=self.conv_block1.block_out_shape,
+                                     activation=conf.activation,
+                                     pool=conf.pooling[1],
+                                     in_c=conf.input_channels[1],
+                                     out_c=conf.out_channels[1],
+                                     kernels=conf.kernels[1])
+        self.conv_block3 = BEncBlock(input_shape=self.conv_block2.block_out_shape,
+                                     activation=conf.activation,
+                                     pool=conf.pooling[2],
+                                     in_c=conf.input_channels[2],
+                                     out_c=conf.out_channels[2],
+                                     kernels=conf.kernels[2])
+        self.conv_block4 = BEncBlock(input_shape=self.conv_block3.block_out_shape,
+                                     activation=conf.activation,
+                                     pool=conf.pooling[3],
+                                     in_c=conf.input_channels[3],
+                                     out_c=conf.out_channels[3],
+                                     kernels=conf.kernels[3])
+        self.conv_block5 = BEncBlock(input_shape=self.conv_block4.block_out_shape,
+                                     activation=conf.activation,
+                                     pool=conf.pooling[4],
+                                     in_c=conf.input_channels[4],
+                                     out_c=conf.out_channels[4],
+                                     kernels=conf.kernels[4])
+
+        self.conv_last1 = nn.Conv2d(conf.input_channels[4][-1], conf.out_channels[4][-1], conf.kernels[4][-1])
+        last_h, last_w = self.conv_block5.calc_out_shape(self.conv_block5.block_out_shape, conf.kernels[4][-1])
+        self.norm_last1 = nn.LayerNorm([conf.out_channels[4][-1], last_h, last_w])
+
+        self.conv_last2 = nn.Conv2d(conf.input_channels[4][-1], conf.out_channels[4][-1], conf.kernels[4][-1])
+        last_h, last_w = self.conv_block5.calc_out_shape((last_h, last_w), conf.kernels[4][-1])
+        self.norm_last2 = nn.LayerNorm([conf.out_channels[4][-1], last_h, last_w])
+
+    def forward(self, x: torch.Tensor):
+        x = self.conv_block1(x)
+        x = self.conv_block2(x)
+        x = self.conv_block3(x)
+        x = self.conv_block4(x)
+        x = self.conv_block5(x)
+
+        x = self.conv_last1(x)
+        x = self.norm_last1(x)
+        x = self.activation(x)
+
+        x = self.conv_last2(x)
+        x = self.norm_last2(x)
+        x = self.activation(x)
+
+        return x
+
+
+@dataclass
+class BurtsevDecoderConf:
+    input_shape: tuple
+    activation: Callable
+    input_channels = [(128, 128), (128, 128), (128, 64), (64, 32), (32, 16)]
+    out_channels = [(128, 128), (128, 128), (64, 64), (32, 32), (16, 1)]
+    kernels = [(3, 3), (3, 3), (5, 5), (5, 5), (7, 9)]
+    pooling = [2, 2, 2, 2, 2]
+
+
+class BDecBlock(nn.Module):
+    def __init__(self,
+                 scale: int,
+                 activation: Callable,
+                 input_shape: Tuple[int, int],
+                 in_c: Tuple[int, int],
+                 out_c: Tuple[int, int],
+                 kernels: Tuple[int, int]):
+        super().__init__()
+        self.activation = activation
+        self.dec_upsample1 = nn.Upsample(scale_factor=scale, mode='nearest')
+
+        self.dec_conv1 = nn.ConvTranspose2d(in_c[0], out_c[0], kernels[0])
+        out_h, out_w = self.calc_out_shape((input_shape[0] * scale, input_shape[1] * scale), kernels[0])
+        self.norm1 = nn.LayerNorm([out_c[0], out_h, out_w])
+
+        self.dec_conv2 = nn.ConvTranspose2d(in_c[1], out_c[1], kernels[1])
+        out_h, out_w = self.calc_out_shape((out_h, out_w), kernels[1])
+        self.norm2 = nn.LayerNorm([out_c[1], out_h, out_w])
+
+        self.block_out_shape = (out_h, out_w)
+
+    @staticmethod
+    def calc_out_shape(in_shape: Tuple[int, int], kernel_size: int) -> Tuple[int, int]:
+        return in_shape[0] + (kernel_size // 2) * 2, in_shape[1] + (kernel_size // 2) * 2
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        o = self.dec_upsample1(x)
+
+        o = self.dec_conv1(o)
+        o = self.norm1(o)
+        o = self.activation(o)
+
+        o = self.dec_conv2(o)
+        o = self.norm2(o)
+        out = self.activation(o)
+
+        return out
+
+
+class BurtsevModelDecoder(nn.Module):
+    def __init__(self, conf: BurtsevDecoderConf):
+        super().__init__()
+        self.activation = conf.activation
+        self.deconv1 = nn.ConvTranspose2d(conf.input_channels[0][0], conf.out_channels[0][0], 5)
+        input_shape = (conf.input_shape[0] + 4, conf.input_shape[1] + 4)
+        self.conv_block1 = BDecBlock(scale=conf.pooling[0],
+                                     input_shape=input_shape,
+                                     activation=conf.activation,
+                                     in_c=conf.input_channels[0],
+                                     out_c=conf.out_channels[0],
+                                     kernels=conf.kernels[0])
+        self.conv_block2 = BDecBlock(scale=conf.pooling[1],
+                                     input_shape=self.conv_block1.block_out_shape,
+                                     activation=conf.activation,
+                                     in_c=conf.input_channels[1],
+                                     out_c=conf.out_channels[1],
+                                     kernels=conf.kernels[1])
+        self.conv_block3 = BDecBlock(scale=conf.pooling[2],
+                                     input_shape=self.conv_block2.block_out_shape,
+                                     activation=conf.activation,
+                                     in_c=conf.input_channels[2],
+                                     out_c=conf.out_channels[2],
+                                     kernels=conf.kernels[2])
+        self.conv_block4 = BDecBlock(scale=conf.pooling[3],
+                                     input_shape=self.conv_block3.block_out_shape,
+                                     activation=conf.activation,
+                                     in_c=conf.input_channels[3],
+                                     out_c=conf.out_channels[3],
+                                     kernels=conf.kernels[3])
+        self.conv_block5 = BDecBlock(scale=conf.pooling[4],
+                                     input_shape=self.conv_block4.block_out_shape,
+                                     activation=conf.activation,
+                                     in_c=conf.input_channels[4],
+                                     out_c=conf.out_channels[4],
+                                     kernels=conf.kernels[4])
+
+    def forward(self, x: torch.Tensor):
+        x = self.activation(self.deconv1(x))
+        x = self.conv_block1(x)
+        x = self.conv_block2(x)
+        x = self.conv_block3(x)
+        x = self.conv_block4(x)
+        x = self.conv_block5(x)
+        return x
+
+
+class BurtsevAutoEncoder(nn.Module):
+    def __init__(self,
+                 encoder_config: BurtsevEncoderConf,
+                 decoder_config: BurtsevDecoderConf,
+                 bottle_neck: int,
+                 activation: Optional[Callable] = functional.leaky_relu):
+        super(BurtsevAutoEncoder, self).__init__()
+        self.activation = activation
+        self.encoder = BurtsevModelEncoder(encoder_config)  # input_shape=[bs, 1, 478, 478] | out_shape=[bs, 128, 6, 6]
+        self.decoder = BurtsevModelDecoder(decoder_config)  # input_shape=[bs, 128, 6, 6] | out_shape=[bs, 1, 478, 478]
+
+        self.encoder_neck_shape = (128, 6, 6)  # [C, H, W]
+        self.enc_flat_shape = int(np.prod(self.encoder_neck_shape))
+
+        self.enc_neck = nn.Linear(self.enc_flat_shape, bottle_neck)
+        self.dec_neck = nn.Linear(bottle_neck, self.enc_flat_shape)
+
+    def forward(self, tensor: torch.Tensor) -> torch.Tensor:
+        x = self.encoder(tensor)
+        x = x.flatten(start_dim=1)
+        bottle_neck = self.activation(self.enc_neck(x))
+        dec_in = self.activation(self.dec_neck(bottle_neck))
+        dec_in = torch.reshape(dec_in, (dec_in.shape[0], *self.encoder_neck_shape))
+        out = self.decoder(dec_in)
+
+        return out
+
+    def get_bottleneck(self, tensor: torch.Tensor) -> torch.Tensor:
+        x = self.encoder(tensor)
+        x = x.flatten(start_dim=1)
+
+        return self.activation(self.enc_neck(x))
