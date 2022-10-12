@@ -367,11 +367,11 @@ class BurtsevForwardModelConf:
     input_shape: Tuple[int, int, int]
     activation: Callable
     scale = 2
-    in_channels = [1, 4, 8, 16, 32, 64, 64, 64, 128, 256, 256, 256, 256, 128, 128, 64, 64, 64, 32, 16, 8, 4]
-    out_channels = [4, 8, 16, 32, 64, 64, 64, 128, 256, 256, 256, 256, 128, 128, 64, 64, 64, 32, 16, 8, 4, 1]
-    kernels = [7, 7, 7, 7, 7, 7, 7, 7, 5, 5, 5, 5, 5, 5, 5, 5, 5, 3, 3, 3, 3, 3]
+    in_channels = [1, 4, 8, 16, 32, 64, 64, 128, 256, 256, 256, 256, 128, 128, 64, 64, 64, 32, 16, 8, 4]
+    out_channels = [4, 8, 16, 32, 64, 64, 128, 256, 256, 256, 256, 128, 128, 64, 64, 64, 32, 16, 8, 4, 1]
+    kernels = [7, 7, 7, 7, 7, 7, 7, 5, 5, 5, 5, 5, 5, 5, 5, 5, 3, 3, 3, 3, 3]
     before_pool = {7: 1}
-    after_pool = {7: 7, 5: 9, 3: 5}
+    after_pool = {7: 6, 5: 9, 3: 5}
 
 
 class BurtsevForwardModel(nn.Module):
@@ -410,9 +410,6 @@ class BurtsevForwardModel(nn.Module):
         self.norm9 = nn.BatchNorm2d(conf.out_channels[18])
         self.conv19 = nn.Conv2d(conf.in_channels[19], conf.out_channels[19], conf.kernels[19])
         self.conv20 = nn.Conv2d(conf.in_channels[20], conf.out_channels[20], conf.kernels[20])
-        self.norm10 = nn.BatchNorm2d(conf.out_channels[20])
-
-        self.conv21 = nn.Conv2d(conf.in_channels[21], conf.out_channels[21], conf.kernels[21])
 
     def forward(self, tensor: torch.Tensor) -> torch.Tensor:
         x = self.activation(self.conv0(tensor))
@@ -437,7 +434,6 @@ class BurtsevForwardModel(nn.Module):
         x = self.activation(self.conv17(x))
         x = self.activation(self.norm9(self.conv18(x)))
         x = self.activation(self.conv19(x))
-        x = self.activation(self.norm10(self.conv20(x)))
+        out = self.activation(self.conv20(x))
 
-        out = self.activation(self.conv21(x))
         return out
